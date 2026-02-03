@@ -12,12 +12,18 @@ categories = ["command-line-utilities"]
 
 [dev-dependencies]
 
+[lints.rust]
+missing_docs = "warn"
+
 [lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
 todo = "deny"
 panic = "deny"
 unimplemented = "deny"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
 
 [profile.release]
 panic = "abort"

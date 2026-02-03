@@ -70,10 +70,13 @@ cd Anneal
 pre-commit install
 pre-commit install --hook-type pre-push
 
+# Install dev tools (if not already installed)
+cargo install cargo-nextest cargo-deny
+
 # Run checks
 cargo fmt
 cargo clippy
-cargo test
+cargo nextest run
 ```
 
 ## License
