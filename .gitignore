@@ -1,0 +1,21 @@
+# Rust
+/target/
+Cargo.lock
+
+# Node (prettier cache)
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development
+*.local
+.env

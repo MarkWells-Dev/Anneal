@@ -1,0 +1,27 @@
+[package]
+name = "anneal"
+version = "0.1.0"
+edition = "2024"
+description = "Proactive AUR rebuild management for Arch Linux"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/MarkWells-Dev/Anneal"
+keywords = ["arch-linux", "aur", "pacman", "rebuild"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+panic = "deny"
+unimplemented = "deny"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = "symbols"
