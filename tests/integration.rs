@@ -299,6 +299,111 @@ mod cli_parsing {
     }
 }
 
+mod rebuild_command {
+    use super::*;
+
+    #[test]
+    fn rebuild_help() {
+        let output = anneal()
+            .args(["rebuild", "--help"])
+            .output()
+            .expect("failed to run");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Rebuild queued packages"));
+        assert!(stdout.contains("--checkrebuild"));
+        assert!(stdout.contains("--cmd"));
+        assert!(stdout.contains("--force"));
+    }
+
+    #[test]
+    fn rebuild_without_database() {
+        let output = anneal().arg("rebuild").output().expect("failed to run");
+
+        // Should fail with no database error
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !output.status.success() {
+            assert!(
+                stderr.contains("No database found")
+                    || stderr.contains("unable to open")
+                    || stderr.contains("No AUR helper"),
+                "unexpected error: {stderr}"
+            );
+        }
+    }
+
+    #[test]
+    fn rebuild_does_not_require_root() {
+        // rebuild command should NOT require root (AUR helpers don't need root)
+        // It will fail for other reasons (no helper, no db) but not permission denied
+        if unsafe { libc::getuid() } == 0 {
+            return;
+        }
+
+        let output = anneal()
+            .args(["rebuild", "-f"])
+            .output()
+            .expect("failed to run");
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("Permission denied"),
+            "rebuild should not require root: {stderr}"
+        );
+    }
+
+    #[test]
+    fn rebuild_quiet_without_force_fails() {
+        // --quiet without -f should fail since we can't prompt
+        let output = anneal()
+            .args(["--quiet", "rebuild"])
+            .output()
+            .expect("failed to run");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Cannot prompt for confirmation")
+                || stderr.contains("No database")
+                || stderr.contains("No AUR helper"),
+            "unexpected error: {stderr}"
+        );
+    }
+
+    #[test]
+    fn rebuild_quiet_with_force_ok() {
+        // --quiet with -f should not fail due to confirmation conflict
+        let output = anneal()
+            .args(["--quiet", "rebuild", "-f"])
+            .output()
+            .expect("failed to run");
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Should NOT fail due to confirmation conflict
+        assert!(
+            !stderr.contains("Cannot prompt"),
+            "quiet+force should work: {stderr}"
+        );
+    }
+
+    #[test]
+    fn rebuild_nonexistent_helper() {
+        // Using a non-existent helper should fail gracefully
+        let output = anneal()
+            .args(["rebuild", "-f", "--cmd", "nonexistent-helper-xyz"])
+            .output()
+            .expect("failed to run");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("not found") || stderr.contains("No database"),
+            "expected helper not found error: {stderr}"
+        );
+    }
+}
+
 mod trigger_command {
     use super::*;
 

@@ -10,17 +10,17 @@
 - [x] `query` - Query packages in queue
 - [x] `triggers` - List configured triggers
 - [x] `config` - Dump configuration
-- [ ] `rebuild` - Invoke AUR helper to rebuild packages
+- [x] `rebuild` - Invoke AUR helper to rebuild packages
 - [x] `trigger` - Process triggers from upgraded packages
 
 ## Rebuild Command
 
-- [ ] AUR helper detection (paru, yay, pikaur, aura, trizen)
-- [ ] Known helper invocation (`paru -S --rebuild <pkg>...`)
-- [ ] Custom helper command support
-- [ ] `--checkrebuild` integration (rebuild-detector package)
-- [ ] Confirmation prompt before rebuilding
-- [ ] Remove packages from queue after successful rebuild
+- [x] AUR helper detection (paru, yay, pikaur, aura, trizen)
+- [x] Known helper invocation (`paru -S --rebuild <pkg>...`)
+- [x] Custom helper command support
+- [x] `--checkrebuild` integration (rebuild-detector package)
+- [x] Confirmation prompt before rebuilding
+- [x] Remove packages from queue after successful rebuild
 
 ## Trigger Command
 
