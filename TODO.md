@@ -34,10 +34,10 @@
 
 ## User Override System
 
-- [ ] Load trigger overrides from `/etc/anneal/triggers/*.conf`
-- [ ] Load package overrides from `/etc/anneal/packages/*.conf`
-- [ ] Glob pattern matching for trigger targets
-- [ ] Empty file = disable trigger / never mark package
+- [x] Load trigger overrides from `/etc/anneal/triggers/*.conf`
+- [x] Load package overrides from `/etc/anneal/packages/*.conf`
+- [x] Glob pattern matching for trigger targets
+- [x] Empty file = disable trigger / never mark package
 
 ## Pacman Hooks
 

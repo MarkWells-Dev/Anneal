@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
+use crate::overrides::Overrides;
 use crate::triggers::{TRIGGERS, is_curated_trigger};
 use crate::version::{Threshold, Version, exceeds_threshold};
 
@@ -125,10 +126,11 @@ impl std::error::Error for TriggerError {}
 ///
 /// For each package that's a known trigger:
 /// 1. Check version threshold (if version info provided)
-/// 2. Query reverse dependencies via pactree
+/// 2. Query reverse dependencies via pactree (or use override patterns)
 /// 3. Filter to AUR packages only
 /// 4. Filter out -bin packages
-/// 5. Return the list of packages to mark
+/// 5. Apply package overrides
+/// 6. Return the list of packages to mark
 ///
 /// Package format: `name` or `name:oldver:newver`
 ///
@@ -138,6 +140,7 @@ impl std::error::Error for TriggerError {}
 pub fn process_triggers(
     packages: &[String],
     threshold: Threshold,
+    overrides: &Overrides,
 ) -> Result<TriggerResult, TriggerError> {
     let mut result = TriggerResult::default();
 
@@ -147,7 +150,7 @@ pub fn process_triggers(
     for pkg_input in packages {
         let input = TriggerInput::parse(pkg_input);
 
-        if !is_trigger(&input.name) {
+        if !is_trigger(&input.name, overrides) {
             result.skipped.push(input.name);
             continue;
         }
@@ -158,7 +161,7 @@ pub fn process_triggers(
             continue;
         }
 
-        let dependents = get_aur_dependents(&input.name, &aur_packages)?;
+        let dependents = get_aur_dependents(&input.name, &aur_packages, overrides)?;
         for dep in dependents {
             result.marked.push(MarkedPackage {
                 package: dep,
@@ -175,17 +178,29 @@ pub fn process_triggers(
 
 /// Check if a package is a known trigger.
 ///
-/// Currently only checks the curated list. User overrides will be added later.
-fn is_trigger(package: &str) -> bool {
-    // TODO: Also check /etc/anneal/triggers/<package>.conf
-    is_curated_trigger(package)
+/// A package is a trigger if it's in the curated list OR has a user override file.
+fn is_trigger(package: &str, overrides: &Overrides) -> bool {
+    is_curated_trigger(package) || overrides.is_user_trigger(package)
 }
 
 /// Get reverse dependencies of a package that are AUR packages.
 fn get_aur_dependents(
     package: &str,
     aur_packages: &HashSet<String>,
+    overrides: &Overrides,
 ) -> Result<Vec<String>, TriggerError> {
+    // Check for trigger override first
+    if let Some(targets) = overrides.get_trigger_targets(package, aur_packages) {
+        // Override handles -bin filtering internally
+        // Apply package overrides to the results
+        let filtered: Vec<String> = targets
+            .into_iter()
+            .filter(|dep| overrides.should_mark_package(dep, package))
+            .collect();
+        return Ok(filtered);
+    }
+
+    // Default: pactree lookup
     let reverse_deps = get_reverse_deps(package)?;
 
     let dependents: Vec<String> = reverse_deps
@@ -195,6 +210,8 @@ fn get_aur_dependents(
             aur_packages.contains(dep)
             // Filter out -bin packages (rebuilding just re-downloads the same binary)
             && !dep.ends_with("-bin")
+            // Check package override
+            && overrides.should_mark_package(dep, package)
         })
         .collect();
 
@@ -261,9 +278,18 @@ fn deduplicate_marked(marked: &mut Vec<MarkedPackage>) {
 }
 
 /// Get list of all known triggers (curated + user overrides).
-pub fn list_all_triggers() -> Vec<&'static str> {
-    // TODO: Also include user-added triggers from /etc/anneal/triggers/
-    TRIGGERS.to_vec()
+pub fn list_all_triggers(overrides: &Overrides) -> Vec<String> {
+    let mut triggers: Vec<String> = TRIGGERS.iter().map(|s| (*s).to_string()).collect();
+
+    // Add user-defined triggers
+    for trigger in overrides.user_triggers() {
+        if !triggers.contains(&trigger.to_string()) {
+            triggers.push(trigger.to_string());
+        }
+    }
+
+    triggers.sort();
+    triggers
 }
 
 #[cfg(test)]
@@ -272,9 +298,10 @@ mod tests {
 
     #[test]
     fn is_trigger_curated() {
-        assert!(is_trigger("qt6-base"));
-        assert!(is_trigger("gtk4"));
-        assert!(!is_trigger("not-a-trigger"));
+        let overrides = Overrides::default();
+        assert!(is_trigger("qt6-base", &overrides));
+        assert!(is_trigger("gtk4", &overrides));
+        assert!(!is_trigger("not-a-trigger", &overrides));
     }
 
     #[test]

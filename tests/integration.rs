@@ -548,3 +548,213 @@ mod trigger_command {
         );
     }
 }
+
+mod overrides {
+    use anneal::overrides::{Overrides, matches_glob};
+    use std::collections::HashSet;
+    use std::fs;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn create_override_file(dir: &std::path::Path, name: &str, content: &str) {
+        let path = dir.join(format!("{name}.conf"));
+        let mut file = fs::File::create(&path).expect("failed to create file");
+        file.write_all(content.as_bytes())
+            .expect("failed to write file");
+    }
+
+    #[test]
+    fn load_trigger_override_with_patterns() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create a trigger override with patterns
+        create_override_file(&triggers_dir, "custom-lib", "custom-app\ncustom-*\n");
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        // Should recognize custom-lib as a user trigger
+        assert!(overrides.is_user_trigger("custom-lib"));
+        assert!(!overrides.is_user_trigger("qt6-base")); // Not a user trigger
+
+        // Test target matching
+        let aur_packages: HashSet<String> = [
+            "custom-app",
+            "custom-tool",
+            "custom-bin", // -bin should be filtered
+            "other-pkg",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let targets = overrides
+            .get_trigger_targets("custom-lib", &aur_packages)
+            .expect("should have override");
+
+        assert!(targets.contains(&"custom-app".to_string()));
+        assert!(targets.contains(&"custom-tool".to_string()));
+        assert!(!targets.contains(&"custom-bin".to_string())); // -bin filtered
+        assert!(!targets.contains(&"other-pkg".to_string()));
+    }
+
+    #[test]
+    fn load_trigger_override_disabled() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create an empty trigger override (disables the trigger)
+        create_override_file(&triggers_dir, "disabled-trigger", "");
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        assert!(overrides.is_user_trigger("disabled-trigger"));
+
+        let aur_packages: HashSet<String> =
+            ["pkg1", "pkg2"].into_iter().map(String::from).collect();
+
+        let targets = overrides
+            .get_trigger_targets("disabled-trigger", &aur_packages)
+            .expect("should have override");
+
+        assert!(targets.is_empty(), "disabled trigger should mark nothing");
+    }
+
+    #[test]
+    fn load_package_override_never_mark() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create an empty package override (never mark)
+        create_override_file(&packages_dir, "protected-pkg", "");
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        // Package should never be marked
+        assert!(!overrides.should_mark_package("protected-pkg", "qt6-base"));
+        assert!(!overrides.should_mark_package("protected-pkg", "any-trigger"));
+
+        // Other packages should still be markable
+        assert!(overrides.should_mark_package("other-pkg", "qt6-base"));
+    }
+
+    #[test]
+    fn load_package_override_restricted_triggers() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create a package override that only allows qt6-base
+        create_override_file(&packages_dir, "qt-only-pkg", "qt6-base\nqt6-*\n");
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        // Should be marked by qt6-base
+        assert!(overrides.should_mark_package("qt-only-pkg", "qt6-base"));
+        // Should be marked by qt6-svg (matches qt6-*)
+        assert!(overrides.should_mark_package("qt-only-pkg", "qt6-svg"));
+        // Should NOT be marked by gtk4
+        assert!(!overrides.should_mark_package("qt-only-pkg", "gtk4"));
+        assert!(!overrides.should_mark_package("qt-only-pkg", "boost"));
+    }
+
+    #[test]
+    fn load_ignores_non_conf_files() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create files that should be ignored (wrong extension)
+        fs::write(triggers_dir.join("readme.txt"), "ignore me").expect("failed to write");
+        fs::write(triggers_dir.join("backup.conf.bak"), "ignore me").expect("failed to write");
+        fs::write(triggers_dir.join("no-extension"), "ignore me").expect("failed to write");
+
+        // Create a valid override
+        create_override_file(&triggers_dir, "valid-trigger", "pkg1\n");
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        assert!(overrides.is_user_trigger("valid-trigger"));
+        assert!(!overrides.is_user_trigger("readme"));
+        assert!(!overrides.is_user_trigger("backup.conf"));
+        assert!(!overrides.is_user_trigger("no-extension"));
+    }
+
+    #[test]
+    fn load_handles_comments_and_whitespace() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("triggers");
+        let packages_dir = temp.path().join("packages");
+        fs::create_dir(&triggers_dir).expect("failed to create triggers dir");
+        fs::create_dir(&packages_dir).expect("failed to create packages dir");
+
+        // Create a trigger override with comments and whitespace
+        create_override_file(
+            &triggers_dir,
+            "commented-trigger",
+            "# This is a comment\n\n  pkg1  \n# Another comment\npkg2\n\n",
+        );
+
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        let aur_packages: HashSet<String> = ["pkg1", "pkg2", "pkg3"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let targets = overrides
+            .get_trigger_targets("commented-trigger", &aur_packages)
+            .expect("should have override");
+
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(&"pkg1".to_string()));
+        assert!(targets.contains(&"pkg2".to_string()));
+        assert!(!targets.contains(&"pkg3".to_string()));
+    }
+
+    #[test]
+    fn load_missing_directories() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let triggers_dir = temp.path().join("nonexistent-triggers");
+        let packages_dir = temp.path().join("nonexistent-packages");
+
+        // Should not panic, just return empty overrides
+        let overrides = Overrides::load_from_paths(&triggers_dir, &packages_dir);
+
+        assert!(!overrides.is_user_trigger("anything"));
+        assert!(overrides.should_mark_package("any-pkg", "any-trigger"));
+    }
+
+    #[test]
+    fn glob_pattern_matching() {
+        // Test various glob patterns
+        assert!(matches_glob("*-git", "neovim-git"));
+        assert!(matches_glob("*-git", "foo-bar-git"));
+        assert!(!matches_glob("*-git", "neovim-git-extra"));
+
+        assert!(matches_glob("python-*", "python-requests"));
+        assert!(matches_glob("python-*", "python-"));
+        assert!(!matches_glob("python-*", "python"));
+
+        assert!(matches_glob("*", "anything"));
+        assert!(matches_glob("*", ""));
+
+        assert!(matches_glob("qt?-base", "qt6-base"));
+        assert!(matches_glob("qt?-base", "qt5-base"));
+        assert!(!matches_glob("qt?-base", "qt-base"));
+        assert!(!matches_glob("qt?-base", "qt66-base"));
+    }
+}

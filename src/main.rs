@@ -10,6 +10,7 @@ use std::process::{Command as ProcessCommand, ExitCode, Stdio};
 use anneal::cli::{Cli, Command};
 use anneal::config::{Config, KNOWN_HELPERS};
 use anneal::db::{DB_PATH, Database, DbError};
+use anneal::overrides::Overrides;
 use anneal::trigger::{TriggerError, process_triggers};
 use anneal::triggers::{TRIGGER_LIST_VERSION, TRIGGERS};
 use clap::Parser;
@@ -502,8 +503,11 @@ fn cmd_trigger(
         return Ok(exit::SUCCESS);
     }
 
+    // Load user overrides
+    let overrides = Overrides::load();
+
     // Process triggers to find AUR dependents
-    let result = process_triggers(&packages, config.version_threshold)?;
+    let result = process_triggers(&packages, config.version_threshold, &overrides)?;
 
     // Report packages skipped due to version threshold
     if !quiet && !result.below_threshold.is_empty() {
