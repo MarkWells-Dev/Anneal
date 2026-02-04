@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Anneal pacman hook - automatically queue AUR packages for rebuild
+# Install to: /usr/share/libalpm/hooks/anneal-trigger.hook
+
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = Checking for AUR packages needing rebuild...
+When = PostTransaction
+Exec = /usr/bin/anneal trigger
+NeedsTargets

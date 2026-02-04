@@ -41,9 +41,9 @@
 
 ## Pacman Hooks
 
-- [ ] Create `anneal-trigger.hook` for PostTransaction
-- [ ] Hook invokes `anneal trigger` with upgraded packages
-- [ ] Install hook to `/usr/share/libalpm/hooks/`
+- [x] Create `anneal-trigger.hook` for PostTransaction
+- [x] Hook invokes `anneal trigger` with upgraded packages
+- [x] Install hook to `/usr/share/libalpm/hooks/`
 
 ## Shell Completions
 
