@@ -1,0 +1,4 @@
+# PKGBUILD files are sourced by makepkg, not executed directly.
+# Variables are used externally and makepkg provides pkgdir/srcdir.
+shell=bash
+disable=SC2034,SC2154,SC2164

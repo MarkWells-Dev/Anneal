@@ -60,5 +60,4 @@
 
 ## Packaging
 
-- [ ] PKGBUILD for AUR
-- [ ] Systemd timer for periodic `anneal rebuild` (optional)
+- [x] PKGBUILD for AUR
