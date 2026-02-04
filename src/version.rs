@@ -26,6 +26,32 @@ pub enum Threshold {
     Always,
 }
 
+impl Threshold {
+    /// Return the string representation of this threshold.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Major => "major",
+            Self::Minor => "minor",
+            Self::Patch => "patch",
+            Self::Always => "always",
+        }
+    }
+}
+
+impl std::str::FromStr for Threshold {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "major" => Ok(Self::Major),
+            "minor" => Ok(Self::Minor),
+            "patch" => Ok(Self::Patch),
+            "always" => Ok(Self::Always),
+            _ => Err(()),
+        }
+    }
+}
+
 /// A parsed version with optional epoch and pkgrel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {

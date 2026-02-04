@@ -3,4 +3,9 @@
 
 //! Anneal - Proactive AUR rebuild management for Arch Linux
 
+pub mod cli;
+pub mod config;
+pub mod db;
+pub mod trigger;
+pub mod triggers;
 pub mod version;

@@ -9,8 +9,12 @@ keywords = ["arch-linux", "aur", "pacman", "rebuild"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+rusqlite = { version = "0.34", features = ["bundled"] }
 
 [dev-dependencies]
+tempfile = "3"
 
 [lints.rust]
 missing_docs = "warn"

@@ -299,7 +299,7 @@ Exec = /usr/bin/anneal trigger
 The `trigger` subcommand:
 
 1. Reads upgraded packages from stdin (one per line)
-2. Filters to packages in the curated trigger list (+ user additions from `/etc/anneal/triggers.conf`)
+2. Filters to packages in the curated trigger list (+ user additions from `/etc/anneal/triggers/*.conf`)
 3. For each trigger, checks version threshold (default: major/minor changes only)
 4. Queries reverse dependencies via `pactree -r -u <trigger>`
 5. Filters to AUR packages only (`pacman -Qm`)
