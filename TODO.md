@@ -53,10 +53,10 @@
 
 ## Polish
 
-- [ ] Colorized output (TTY detection)
-- [ ] Match pacman output style
-- [ ] Event history pruning (use config.retention_days)
-- [ ] Proper error messages for all edge cases
+- [x] Colorized output (TTY detection)
+- [x] Match pacman output style
+- [x] Event history pruning (use config.retention_days)
+- [x] Proper error messages for all edge cases
 
 ## Packaging
 

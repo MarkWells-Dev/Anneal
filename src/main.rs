@@ -10,6 +10,7 @@ use std::process::{Command as ProcessCommand, ExitCode, Stdio};
 use anneal::cli::{Cli, Command};
 use anneal::config::{Config, KNOWN_HELPERS};
 use anneal::db::{DB_PATH, Database, DbError};
+use anneal::output;
 use anneal::overrides::Overrides;
 use anneal::trigger::{TriggerError, process_triggers};
 use anneal::triggers::{TRIGGER_LIST_VERSION, TRIGGERS};
@@ -28,20 +29,20 @@ fn main() -> ExitCode {
 
     // Check root requirement
     if cli.command.requires_root() && !is_root() {
-        eprintln!("[anneal] error: Permission denied. This command requires root privileges.");
+        output::error("Permission denied. This command requires root privileges.");
         return ExitCode::from(exit::ERROR);
     }
 
     // Check quiet + confirmation conflict
     if cli.quiet && needs_confirmation(&cli.command) && !has_force_flag(&cli.command) {
-        eprintln!("[anneal] error: Cannot prompt for confirmation with --quiet. Use -f to force.");
+        output::error("Cannot prompt for confirmation with --quiet. Use -f to force.");
         return ExitCode::from(exit::ERROR);
     }
 
     match run(cli) {
         Ok(code) => ExitCode::from(code),
         Err(e) => {
-            eprintln!("[anneal] error: {e}");
+            output::error(&e.to_string());
             ExitCode::from(exit::ERROR)
         }
     }
@@ -57,17 +58,20 @@ fn run(cli: Cli) -> Result<u8, Error> {
             trigger,
             trigger_version,
         } => cmd_mark(
+            &config,
             &packages,
             trigger.as_deref(),
             trigger_version.as_deref(),
             cli.quiet,
         ),
 
-        Command::Unmark { packages, strict } => cmd_unmark(packages, strict, cli.quiet),
+        Command::Unmark { packages, strict } => cmd_unmark(&config, packages, strict, cli.quiet),
 
         Command::List => cmd_list(cli.quiet),
 
-        Command::Clear { force, trigger } => cmd_clear(force, trigger.as_deref(), cli.quiet),
+        Command::Clear { force, trigger } => {
+            cmd_clear(&config, force, trigger.as_deref(), cli.quiet)
+        }
 
         Command::Rebuild {
             force,
@@ -191,12 +195,13 @@ impl HelperInvocation {
 // ==================== Command Implementations ====================
 
 fn cmd_mark(
+    config: &Config,
     packages: &[String],
     trigger: Option<&str>,
     trigger_version: Option<&str>,
     quiet: bool,
 ) -> Result<u8, Error> {
-    let mut db = Database::open(90)?; // TODO: use config.retention_days
+    let mut db = Database::open(config.retention_days)?;
 
     let mut newly_marked = 0;
     for pkg in packages {
@@ -207,17 +212,22 @@ fn cmd_mark(
 
     if !quiet {
         match trigger {
-            Some(t) => {
-                println!("[anneal] Marked {newly_marked} package(s) for rebuild (trigger: {t})")
-            }
-            None => println!("[anneal] Marked {newly_marked} package(s) for rebuild"),
+            Some(t) => output::status(&format!(
+                "Marked {newly_marked} package(s) for rebuild (trigger: {t})"
+            )),
+            None => output::success_count("Marked", newly_marked),
         }
     }
 
     Ok(exit::SUCCESS)
 }
 
-fn cmd_unmark(packages: Vec<String>, strict: bool, quiet: bool) -> Result<u8, Error> {
+fn cmd_unmark(
+    config: &Config,
+    packages: Vec<String>,
+    strict: bool,
+    quiet: bool,
+) -> Result<u8, Error> {
     let packages = if packages.is_empty() {
         read_stdin_packages()?
     } else {
@@ -226,12 +236,12 @@ fn cmd_unmark(packages: Vec<String>, strict: bool, quiet: bool) -> Result<u8, Er
 
     if packages.is_empty() {
         if !quiet {
-            println!("[anneal] No packages specified");
+            output::status("No packages specified");
         }
         return Ok(exit::SUCCESS);
     }
 
-    let mut db = Database::open(90)?;
+    let mut db = Database::open(config.retention_days)?;
     let mut removed = 0;
     let mut not_found = Vec::new();
 
@@ -244,11 +254,11 @@ fn cmd_unmark(packages: Vec<String>, strict: bool, quiet: bool) -> Result<u8, Er
     }
 
     if !quiet {
-        println!("[anneal] Removed {removed} package(s) from queue");
+        output::success_count("Removed", removed);
     }
 
     if strict && !not_found.is_empty() {
-        eprintln!("[anneal] warning: Not in queue: {}", not_found.join(", "));
+        output::warning(&format!("Not in queue: {}", not_found.join(", ")));
         return Ok(exit::NOT_FOUND);
     }
 
@@ -261,7 +271,7 @@ fn cmd_list(quiet: bool) -> Result<u8, Error> {
 
     if queue.is_empty() {
         if !quiet {
-            println!("[anneal] No packages in queue");
+            output::status("No packages in queue");
         }
         return Ok(exit::SUCCESS);
     }
@@ -270,50 +280,54 @@ fn cmd_list(quiet: bool) -> Result<u8, Error> {
         // Get the most recent trigger event for context
         if let Some(event) = db.get_latest_event(&entry.package)? {
             match event.trigger_package {
-                Some(trigger) => println!("{} ({})", entry.package, trigger),
-                None => println!("{} (external)", entry.package),
+                Some(ref trigger) => output::package_with_trigger(&entry.package, trigger),
+                None => output::package_with_trigger(&entry.package, "external"),
             }
         } else {
-            println!("{}", entry.package);
+            output::package(&entry.package);
         }
     }
 
     if !quiet {
-        eprintln!("[anneal] {} package(s) in queue", queue.len());
+        output::info(&format!("{} package(s) in queue", queue.len()));
     }
 
     Ok(exit::SUCCESS)
 }
 
-fn cmd_clear(force: bool, trigger: Option<&str>, quiet: bool) -> Result<u8, Error> {
-    let mut db = Database::open(90)?;
+fn cmd_clear(
+    config: &Config,
+    force: bool,
+    trigger: Option<&str>,
+    quiet: bool,
+) -> Result<u8, Error> {
+    let mut db = Database::open(config.retention_days)?;
 
     if let Some(trigger_name) = trigger {
         // Clear events for a specific trigger
         let count = db.clear_trigger_events(trigger_name)?;
         if !quiet {
-            println!("[anneal] Cleared {count} event(s) for trigger '{trigger_name}'");
+            output::status(&format!(
+                "Cleared {count} event(s) for trigger '{trigger_name}'"
+            ));
         }
     } else {
         // Clear entire queue
         let queue = db.list()?;
         if queue.is_empty() {
             if !quiet {
-                println!("[anneal] Queue is already empty");
+                output::status("Queue is already empty");
             }
             return Ok(exit::SUCCESS);
         }
 
         if !force {
-            eprint!(
-                "[anneal] Clear {} package(s) from queue? [y/N] ",
-                queue.len()
-            );
+            eprint!(":: Clear {} package(s) from queue? [y/N] ", queue.len());
             io::stderr().flush().ok();
 
             if !confirm()? {
                 if !quiet {
-                    println!("[anneal] Cancelled");
+                    output::status("Cancelled");
                 }
                 return Ok(exit::SUCCESS);
             }
@@ -321,7 +335,7 @@ fn cmd_clear(force: bool, trigger: Option<&str>, quiet: bool) -> Result<u8, Erro
 
         let count = db.clear()?;
         if !quiet {
-            println!("[anneal] Cleared {count} package(s) from queue");
+            output::success_count("Cleared", count);
         }
     }
 
@@ -379,7 +393,7 @@ fn cmd_rebuild(
             }
             Err(e) => {
                 // Warn but don't fail if checkrebuild isn't available
-                eprintln!("[anneal] warning: {e}");
+                output::warning(&e.to_string());
             }
         }
     }
@@ -388,7 +402,7 @@ fn cmd_rebuild(
     let total_count = from_queue.len() + from_checkrebuild.len();
     if total_count == 0 {
         if !quiet {
-            println!("[anneal] No packages to rebuild");
+            output::status("No packages to rebuild");
         }
         return Ok(exit::SUCCESS);
     }
@@ -396,13 +410,13 @@ fn cmd_rebuild(
     // Step 6: Show packages and confirm
     if !quiet {
         if !from_queue.is_empty() {
-            eprintln!("[anneal] From queue:");
+            output::header("From queue:");
             for pkg in &from_queue {
                 eprintln!("  {pkg}");
             }
         }
         if !from_checkrebuild.is_empty() {
-            eprintln!("[anneal] From checkrebuild:");
+            output::header("From checkrebuild:");
             for pkg in &from_checkrebuild {
                 eprintln!("  {pkg}");
             }
@@ -410,12 +424,12 @@ fn cmd_rebuild(
     }
 
     if !force {
-        eprint!("[anneal] Rebuild {total_count} package(s)? [y/N] ");
+        eprint!(":: Rebuild {total_count} package(s)? [y/N] ");
         io::stderr().flush().ok();
 
         if !confirm()? {
             if !quiet {
-                println!("[anneal] Cancelled");
+                output::status("Cancelled");
             }
             return Ok(exit::SUCCESS);
         }
@@ -446,7 +460,7 @@ fn cmd_rebuild(
         }
 
         if !quiet {
-            println!("[anneal] Successfully rebuilt {total_count} package(s)");
+            output::success_count("Successfully rebuilt", total_count);
         }
         Ok(exit::SUCCESS)
     } else {
@@ -483,11 +497,11 @@ fn cmd_query(packages: &[String], quiet: bool) -> Result<u8, Error> {
 
 fn cmd_triggers(quiet: bool) -> Result<u8, Error> {
     if !quiet {
-        println!("[anneal] Curated triggers (v{TRIGGER_LIST_VERSION}):");
+        output::header(&format!("Curated triggers (v{TRIGGER_LIST_VERSION})"));
     }
 
     for trigger in TRIGGERS {
-        println!("{trigger}");
+        output::package(trigger);
     }
 
     Ok(exit::SUCCESS)
@@ -517,16 +531,16 @@ fn cmd_trigger(
 
     // Report packages skipped due to version threshold
     if !quiet && !result.below_threshold.is_empty() {
-        eprintln!(
-            "[anneal] Skipped {} trigger(s) below {} threshold",
+        output::info(&format!(
+            "Skipped {} trigger(s) below {} threshold",
             result.below_threshold.len(),
             config.version_threshold.as_str()
-        );
+        ));
     }
 
     if result.marked.is_empty() {
         if !quiet {
-            eprintln!("[anneal] No packages to mark");
+            output::info("No packages to mark");
         }
         return Ok(exit::SUCCESS);
     }
@@ -534,13 +548,13 @@ fn cmd_trigger(
     if dry_run {
         // Just print what would be marked
         for m in &result.marked {
-            println!("{} ({})", m.package, m.trigger);
+            output::package_with_trigger(&m.package, &m.trigger);
         }
         if !quiet {
-            eprintln!(
-                "[anneal] Would mark {} package(s) for rebuild",
+            output::info(&format!(
+                "Would mark {} package(s) for rebuild",
                 result.marked.len()
-            );
+            ));
         }
     } else {
         // Actually mark the packages
@@ -551,13 +565,16 @@ fn cmd_trigger(
             if db.mark(&m.package, Some(&m.trigger), None)? {
                 newly_marked += 1;
                 if !quiet {
-                    println!("[anneal] Marked {} (triggered by {})", m.package, m.trigger);
+                    output::status(&format!(
+                        "Marked {} (triggered by {})",
+                        m.package, m.trigger
+                    ));
                 }
             }
         }
 
         if !quiet {
-            eprintln!("[anneal] Marked {newly_marked} package(s) for rebuild");
+            output::info(&format!("Marked {newly_marked} package(s) for rebuild"));
         }
     }
 

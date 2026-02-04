@@ -6,6 +6,7 @@
 pub mod cli;
 pub mod config;
 pub mod db;
+pub mod output;
 pub mod overrides;
 pub mod trigger;
 pub mod triggers;
