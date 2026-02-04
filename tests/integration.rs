@@ -549,6 +549,92 @@ mod trigger_command {
     }
 }
 
+mod completions {
+    use super::*;
+
+    #[test]
+    fn bash_completions() {
+        let output = anneal()
+            .args(["completions", "bash"])
+            .output()
+            .expect("failed to run");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("_anneal"), "should contain bash function");
+        assert!(
+            stdout.contains("complete"),
+            "should contain complete command"
+        );
+    }
+
+    #[test]
+    fn zsh_completions() {
+        let output = anneal()
+            .args(["completions", "zsh"])
+            .output()
+            .expect("failed to run");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("#compdef") || stdout.contains("_anneal"),
+            "should contain zsh completion markers"
+        );
+    }
+
+    #[test]
+    fn fish_completions() {
+        let output = anneal()
+            .args(["completions", "fish"])
+            .output()
+            .expect("failed to run");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("complete -c anneal"),
+            "should contain fish complete command"
+        );
+    }
+
+    #[test]
+    fn completions_requires_shell_arg() {
+        let output = anneal().arg("completions").output().expect("failed to run");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("required") || stderr.contains("<SHELL>"));
+    }
+
+    #[test]
+    fn completions_invalid_shell() {
+        let output = anneal()
+            .args(["completions", "invalid-shell"])
+            .output()
+            .expect("failed to run");
+
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("invalid") || stderr.contains("error"));
+    }
+
+    #[test]
+    fn completions_help() {
+        let output = anneal()
+            .args(["completions", "--help"])
+            .output()
+            .expect("failed to run");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Generate shell completions"));
+        assert!(stdout.contains("bash"));
+        assert!(stdout.contains("zsh"));
+        assert!(stdout.contains("fish"));
+    }
+}
+
 mod overrides {
     use anneal::overrides::{Overrides, matches_glob};
     use std::collections::HashSet;

@@ -6,6 +6,7 @@
 //! Uses clap for argument parsing with derive macros.
 
 use clap::{Parser, Subcommand};
+use clap_complete::Shell;
 
 /// Proactive AUR rebuild management for Arch Linux.
 #[derive(Parser, Debug)]
@@ -114,6 +115,13 @@ pub enum Command {
 
     /// Dump current configuration.
     Config,
+
+    /// Generate shell completions.
+    Completions {
+        /// Shell to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 impl Command {

@@ -47,9 +47,9 @@
 
 ## Shell Completions
 
-- [ ] Bash completions
-- [ ] Zsh completions
-- [ ] Fish completions
+- [x] Bash completions
+- [x] Zsh completions
+- [x] Fish completions
 
 ## Polish
 

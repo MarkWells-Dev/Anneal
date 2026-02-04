@@ -13,7 +13,8 @@ use anneal::db::{DB_PATH, Database, DbError};
 use anneal::overrides::Overrides;
 use anneal::trigger::{TriggerError, process_triggers};
 use anneal::triggers::{TRIGGER_LIST_VERSION, TRIGGERS};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::generate;
 
 /// Exit codes.
 mod exit {
@@ -95,6 +96,11 @@ fn run(cli: Cli) -> Result<u8, Error> {
         }
 
         Command::Config => cmd_config(&config, cli.quiet),
+
+        Command::Completions { shell } => {
+            cmd_completions(shell);
+            Ok(exit::SUCCESS)
+        }
     }
 }
 
@@ -563,6 +569,11 @@ fn cmd_config(config: &Config, quiet: bool) -> Result<u8, Error> {
         print!("{}", config.to_conf());
     }
     Ok(exit::SUCCESS)
+}
+
+fn cmd_completions(shell: clap_complete::Shell) {
+    let mut cmd = Cli::command();
+    generate(shell, &mut cmd, "anneal", &mut io::stdout());
 }
 
 // ==================== Helper Functions ====================

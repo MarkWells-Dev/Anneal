@@ -10,6 +10,7 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 libc = "0.2"
 rusqlite = { version = "0.34", features = ["bundled"] }
 
