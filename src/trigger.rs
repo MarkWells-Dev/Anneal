@@ -17,7 +17,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
 use crate::overrides::Overrides;
-use crate::triggers::{TRIGGERS, is_curated_trigger};
+use crate::triggers::{TRIGGERS, get_curated_threshold, is_curated_trigger};
 use crate::version::{Threshold, Version, exceeds_threshold};
 
 /// Parsed trigger input with optional version info.
@@ -139,7 +139,7 @@ impl std::error::Error for TriggerError {}
 /// Returns an error if pactree or pacman commands fail.
 pub fn process_triggers(
     packages: &[String],
-    threshold: Threshold,
+    default_threshold: Threshold,
     overrides: &Overrides,
 ) -> Result<TriggerResult, TriggerError> {
     let mut result = TriggerResult::default();
@@ -154,6 +154,9 @@ pub fn process_triggers(
             result.skipped.push(input.name);
             continue;
         }
+
+        // Use per-trigger threshold for curated triggers, global config for user-defined
+        let threshold = get_curated_threshold(&input.name).unwrap_or(default_threshold);
 
         // Check version threshold
         if !input.exceeds_threshold(threshold) {
@@ -277,18 +280,24 @@ fn deduplicate_marked(marked: &mut Vec<MarkedPackage>) {
     marked.retain(|m| seen.insert(m.package.clone()));
 }
 
-/// Get list of all known triggers (curated + user overrides).
-pub fn list_all_triggers(overrides: &Overrides) -> Vec<String> {
-    let mut triggers: Vec<String> = TRIGGERS.iter().map(|s| (*s).to_string()).collect();
+/// Get list of all known triggers (curated + user overrides) with thresholds.
+pub fn list_all_triggers(
+    overrides: &Overrides,
+    default_threshold: Threshold,
+) -> Vec<(String, Threshold)> {
+    let mut triggers: Vec<(String, Threshold)> = TRIGGERS
+        .iter()
+        .map(|(name, threshold)| ((*name).to_string(), *threshold))
+        .collect();
 
-    // Add user-defined triggers
+    // Add user-defined triggers with the global default threshold
     for trigger in overrides.user_triggers() {
-        if !triggers.contains(&trigger.to_string()) {
-            triggers.push(trigger.to_string());
+        if !triggers.iter().any(|(name, _)| name == trigger) {
+            triggers.push((trigger.to_string(), default_threshold));
         }
     }
 
-    triggers.sort();
+    triggers.sort_by(|(a, _), (b, _)| a.cmp(b));
     triggers
 }
 

@@ -500,8 +500,15 @@ fn cmd_triggers(quiet: bool) -> Result<u8, Error> {
         output::header(&format!("Curated triggers (v{TRIGGER_LIST_VERSION})"));
     }
 
-    for trigger in TRIGGERS {
-        output::package(trigger);
+    for (name, threshold) in TRIGGERS {
+        if quiet {
+            output::package(name);
+        } else {
+            output::package(&format!(
+                "{name} ({threshold})",
+                threshold = threshold.as_str()
+            ));
+        }
     }
 
     Ok(exit::SUCCESS)
@@ -532,9 +539,8 @@ fn cmd_trigger(
     // Report packages skipped due to version threshold
     if !quiet && !result.below_threshold.is_empty() {
         output::info(&format!(
-            "Skipped {} trigger(s) below {} threshold",
+            "Skipped {} trigger(s) below threshold",
             result.below_threshold.len(),
-            config.version_threshold.as_str()
         ));
     }
 

@@ -1,8 +1,8 @@
 # Maintainer: Mark Wells <contact@markwells.dev>
 pkgname=anneal
 _reponame=Anneal
-pkgver=0.1.0
-pkgrel=3
+pkgver=0.2.0
+pkgrel=1
 pkgdesc="Proactive AUR rebuild management for Arch Linux"
 arch=('x86_64')
 url="https://github.com/MarkWells-Dev/Anneal"
