@@ -7,17 +7,29 @@ on:
 
 jobs:
   release:
-    name: GitHub Release
+    name: Build & Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --features bundled-sqlite
+
+      - name: Prepare release assets
+        run: cp target/release/anneal anneal-x86_64-linux
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: |
+            anneal-x86_64-linux
+            contrib/anneal-trigger.hook
 
   aur-publish:
     name: Publish to AUR (anneal)
@@ -61,4 +73,22 @@ jobs:
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+
+  aur-publish-bin:
+    name: Publish to AUR (anneal-bin)
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish anneal-bin to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: anneal-bin
+          pkgbuild: ./contrib/PKGBUILD-bin
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          updpkgsums: true
           commit_message: "Update to ${{ github.ref_name }}"
