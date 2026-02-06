@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -40,7 +41,9 @@ jobs:
         run: cargo build --all-features
 
       - name: Install cargo-nextest
-        run: cargo install cargo-nextest --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
 
       - name: Run tests
         run: cargo nextest run --all-features
@@ -55,7 +58,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
 
       - name: Run cargo-deny
         run: cargo deny check
@@ -80,7 +85,9 @@ jobs:
         run: pip install pre-commit
 
       - name: Install tooling
-        run: cargo install cargo-deny taplo-cli --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,taplo-cli
 
       - name: Run pre-commit
         run: pre-commit run --all-files
