@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
 
+# If multiple runs start for the same commit (e.g. branch push + tag push),
+# cancel the redundant one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -79,7 +85,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -S --noconfirm git pacman-contrib namcap python-pre-commit \
-          rustup nodejs npm shellcheck shfmt gcc cargo-deny
+          rustup nodejs npm shellcheck shfmt gcc cargo-deny which diffutils
 
       - name: Configure Rust
         run: rustup default stable
