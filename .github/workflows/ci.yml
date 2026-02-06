@@ -79,5 +79,8 @@ jobs:
       - name: Install pre-commit
         run: pip install pre-commit
 
+      - name: Install tooling
+        run: cargo install cargo-deny taplo-cli --locked
+
       - name: Run pre-commit
         run: pre-commit run --all-files
