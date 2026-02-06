@@ -64,3 +64,19 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
+
+  - repo: local
+    hooks:
+      - id: updpkgsums
+        name: Update PKGBUILD checksums
+        entry: updpkgsums
+        language: system
+        files: PKGBUILD(-bin|-git)?$
+        pass_filenames: true
+
+      - id: namcap
+        name: Lint PKGBUILDs
+        entry: namcap
+        language: system
+        files: PKGBUILD(-bin|-git)?$
+        pass_filenames: true

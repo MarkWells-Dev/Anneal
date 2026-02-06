@@ -1,6 +1,6 @@
 # Maintainer: Mark Wells <contact@markwells.dev>
 pkgname=anneal-bin
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Proactive AUR rebuild management for Arch Linux (prebuilt binary)"
 arch=('x86_64')
@@ -18,7 +18,7 @@ optdepends=(
 provides=('anneal')
 conflicts=('anneal' 'anneal-git')
 source=(
-    "$url/releases/download/v$pkgver/anneal-x86_64-linux"
+    "$url/releases/download/v$pkgver/anneal-$CARCH-linux"
     "$url/releases/download/v$pkgver/anneal-trigger.hook"
     "$url/raw/v$pkgver/LICENSE"
 )
@@ -26,7 +26,7 @@ sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
     # Binary
-    install -Dm755 anneal-x86_64-linux "$pkgdir/usr/bin/anneal"
+    install -Dm755 "anneal-$CARCH-linux" "$pkgdir/usr/bin/anneal"
 
     # Pacman hook
     install -Dm644 anneal-trigger.hook \
