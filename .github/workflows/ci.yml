@@ -85,7 +85,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -S --noconfirm git pacman-contrib namcap python-pre-commit \
-          rustup nodejs npm shellcheck shfmt gcc cargo-deny which diffutils
+          rustup nodejs npm shellcheck shfmt gcc cargo-deny which diffutils taplo
 
       - name: Configure Rust
         run: rustup default stable
