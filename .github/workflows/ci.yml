@@ -68,26 +68,20 @@ jobs:
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
+    container: archlinux:latest
     steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm git pacman-contrib namcap python-pre-commit \
+          rustup nodejs npm shellcheck shfmt gcc cargo-deny
+
+      - name: Configure Rust
+        run: rustup default stable
+
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Install tooling
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny,taplo-cli
-
       - name: Run pre-commit
-        run: pre-commit run --all-files
+        run: |
+          # updpkgsums is skipped in CI because it requires the GitHub release
+          # to be live, which only happens after this CI passes.
+          SKIP=updpkgsums pre-commit run --all-files
