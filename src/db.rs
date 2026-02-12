@@ -135,8 +135,10 @@ impl Database {
 
     /// Initialize the database schema.
     fn init(&mut self) -> Result<(), DbError> {
-        // Enable WAL mode for concurrent access
-        self.conn.pragma_update(None, "journal_mode", "WAL")?;
+        // Use DELETE mode to ensure read-only users can access the DB.
+        // WAL mode requires write access to the directory to create -shm files,
+        // which prevents non-root users from running `anneal list`.
+        self.conn.pragma_update(None, "journal_mode", "DELETE")?;
 
         self.conn.execute_batch(
             r"
@@ -654,5 +656,35 @@ mod tests {
         assert_eq!(days_to_date(19723), (2024, 1, 1));
         // 2000-01-01 is 10957 days from epoch
         assert_eq!(days_to_date(10957), (2000, 1, 1));
+    }
+
+    #[test]
+    fn readonly_mode_strict() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("test.db");
+
+        // Create and populate database
+        {
+            let mut db = Database::open_at(&path, 90).expect("open db");
+            db.mark("pkg1", None, None).expect("mark");
+        }
+
+        // Restrict permissions to read-only for file and directory
+        let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
+        perms.set_mode(0o444);
+        std::fs::set_permissions(&path, perms).expect("set file permissions");
+
+        let mut dir_perms = std::fs::metadata(dir.path())
+            .expect("dir metadata")
+            .permissions();
+        dir_perms.set_mode(0o555);
+        std::fs::set_permissions(dir.path(), dir_perms).expect("set dir permissions");
+
+        // Open read-only
+        let db = Database::open_readonly(&path).expect("open readonly");
+        let queue = db.list().expect("list");
+        assert_eq!(queue.len(), 1);
     }
 }
