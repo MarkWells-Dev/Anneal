@@ -44,22 +44,6 @@ When unsure, prefer `minor` as the default.
 
 ## Triggers
 
-### Core System
-
-#### glibc
-
-- **Version scheme:** Semver (2.x.y)
-- **Threshold:** `major`
-- **Rationale:** Foundational C library. Major version changes (extremely rare) affect all compiled code. Minor/patch versions maintain ABI compatibility.
-- **Example dependents:** Nearly all AUR packages (transitively)
-
-#### gcc-libs
-
-- **Version scheme:** Semver (major.minor.patch)
-- **Threshold:** `major`
-- **Rationale:** C++ ABI changes between major GCC versions. libstdc++ ABI is generally stable within a major version.
-- **Example dependents:** All C++ AUR packages
-
 ### Toolkits
 
 #### glib2
@@ -338,6 +322,17 @@ When proposing a new trigger via PR:
 3. **Propose a threshold** - What's the minimum version change that typically breaks dependents?
 4. **Provide examples** - List AUR packages known to break when this trigger updates
 5. **Consider overlap** - Note if checkrebuild would also catch this (acceptable but worth documenting)
+
+## Intentionally Excluded Triggers
+
+The following packages are intentionally omitted from the curated trigger list, despite having many dependents:
+
+| Package    | Reason for Exclusion                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glibc`    | Foundational. Breaks are extremely rare and always involve soname changes handled by `checkrebuild`.                                                                                              |
+| `gcc-libs` | Foundational. Used by nearly all C++ packages. `pactree` discovery creates excessive noise (e.g., marking shell scripts or simple C tools) for updates that are better handled by `checkrebuild`. |
+
+These packages are best handled by `anneal rebuild --checkrebuild` (requires `rebuild-detector`).
 
 ## Trigger List Version
 
