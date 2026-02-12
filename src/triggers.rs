@@ -15,7 +15,7 @@ use crate::version::Threshold;
 /// Version of the curated trigger list.
 ///
 /// Increment this when adding, removing, or modifying triggers.
-pub const TRIGGER_LIST_VERSION: u32 = 3;
+pub const TRIGGER_LIST_VERSION: u32 = 4;
 
 /// Curated list of ABI-sensitive packages with per-trigger thresholds.
 ///
@@ -26,9 +26,6 @@ pub const TRIGGER_LIST_VERSION: u32 = 3;
 /// - `Patch` — any version change including patch (poor ABI stability)
 /// - `Always` — any change at all, including pkgrel (non-semver or unpredictable)
 pub const TRIGGERS: &[(&str, Threshold)] = &[
-    // Core system
-    ("glibc", Threshold::Major),
-    ("gcc-libs", Threshold::Major),
     // Toolkits
     ("glib2", Threshold::Minor),
     ("qt5-base", Threshold::Minor),
@@ -118,7 +115,6 @@ mod tests {
 
     #[test]
     fn curated_threshold_lookup() {
-        assert_eq!(get_curated_threshold("glibc"), Some(Threshold::Major));
         assert_eq!(get_curated_threshold("protobuf"), Some(Threshold::Patch));
         assert_eq!(get_curated_threshold("abseil-cpp"), Some(Threshold::Always));
         assert_eq!(get_curated_threshold("qt6-base"), Some(Threshold::Minor));

@@ -316,14 +316,28 @@ impl Database {
 
     /// Clear trigger events for a specific trigger package.
     ///
+    /// If a package in the queue has no remaining triggers after this operation,
+    /// it is removed from the queue entirely.
+    ///
     /// # Errors
     ///
     /// Returns an error if the database operation fails.
     pub fn clear_trigger_events(&mut self, trigger_package: &str) -> Result<usize, DbError> {
-        let count = self.conn.execute(
+        let tx = self.conn.transaction()?;
+
+        // Delete the matching trigger events
+        let count = tx.execute(
             "DELETE FROM trigger_events WHERE trigger_package = ?1",
             params![trigger_package],
         )?;
+
+        // Remove packages from queue that no longer have ANY trigger events
+        tx.execute(
+            "DELETE FROM queue WHERE package NOT IN (SELECT DISTINCT package FROM trigger_events)",
+            [],
+        )?;
+
+        tx.commit()?;
         Ok(count)
     }
 
@@ -614,15 +628,28 @@ mod tests {
 
         db.mark("pkg1", Some("qt6-base"), None).expect("mark");
         db.mark("pkg2", Some("gtk4"), None).expect("mark");
+        // pkg3 has two triggers
+        db.mark("pkg3", Some("qt6-base"), None).expect("mark");
+        db.mark("pkg3", Some("gtk4"), None).expect("mark");
 
         let count = db.clear_trigger_events("qt6-base").expect("clear");
-        assert_eq!(count, 1);
+        assert_eq!(count, 2); // pkg1 and pkg3
 
+        // pkg1 should be gone from queue (no triggers left)
+        assert!(!db.is_marked("pkg1").expect("is_marked"));
         let events1 = db.get_events("pkg1").expect("events");
         assert!(events1.is_empty());
 
+        // pkg2 should still be there (gtk4 trigger untouched)
+        assert!(db.is_marked("pkg2").expect("is_marked"));
         let events2 = db.get_events("pkg2").expect("events");
         assert_eq!(events2.len(), 1);
+
+        // pkg3 should still be there (has gtk4 trigger left)
+        assert!(db.is_marked("pkg3").expect("is_marked"));
+        let events3 = db.get_events("pkg3").expect("events");
+        assert_eq!(events3.len(), 1);
+        assert_eq!(events3[0].trigger_package, Some("gtk4".to_string()));
     }
 
     #[test]
