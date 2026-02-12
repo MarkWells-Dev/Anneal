@@ -72,6 +72,7 @@ repos:
         language: system
         files: PKGBUILD(-bin|-git)?$
         pass_filenames: true
+        stages: [manual]
 
       - id: namcap
         name: Lint PKGBUILDs
@@ -79,3 +80,4 @@ repos:
         language: system
         files: PKGBUILD(-bin|-git)?$
         pass_filenames: true
+        stages: [manual]

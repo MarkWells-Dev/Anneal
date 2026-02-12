@@ -127,8 +127,9 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          # updpkgsums is skipped here because it requires the remote source tarball
-          SKIP=updpkgsums pre-commit run --all-files
+          # updpkgsums is skipped here because it requires the remote source tarball.
+          # We include the manual stage so namcap and others still run in CI.
+          SKIP=updpkgsums pre-commit run --all-files --hook-stage manual
 
   # 5. Version Verification (Ensures versions are in sync before release)
   verify-version:
