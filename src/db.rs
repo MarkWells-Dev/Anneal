@@ -133,7 +133,14 @@ impl Database {
     ///
     /// Returns an error if the database doesn't exist or cannot be opened.
     pub fn open_readonly(path: &Path) -> Result<Self, DbError> {
-        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        // We use immutable=1 to prevent SQLite from trying to create side files
+        // (-shm, -wal) even if the database was left in WAL mode.
+        let path_str = path.to_string_lossy();
+        let uri = format!("file:{}?immutable=1", path_str);
+        let conn = Connection::open_with_flags(
+            &uri,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+        )?;
         Ok(Self {
             conn,
             retention_days: 0, // Not used for read-only

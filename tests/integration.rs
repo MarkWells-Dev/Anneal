@@ -220,6 +220,63 @@ mod readonly_commands {
             );
         }
     }
+
+    #[test]
+    fn list_readonly_wal_database_regression() {
+        use anneal::db::Database;
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let db_dir = temp.path().join("anneal");
+        let db_path = db_dir.join("anneal.db");
+
+        // 1. Create and initialize the database (using API, no root needed)
+        fs::create_dir(&db_dir).expect("failed to create db dir");
+        {
+            let mut db = Database::open_at(&db_path, 90).expect("failed to open db");
+            // Force it to WAL mode to test the regression
+            db.mark("test-pkg", Some("qt6-base"), Some("6.7.0"))
+                .expect("failed to mark");
+
+            // We have to use raw SQLite to force WAL because Database::open_at forces DELETE mode
+            let conn = rusqlite::Connection::open(&db_path).expect("raw open");
+            conn.pragma_update(None, "journal_mode", "WAL")
+                .expect("failed to set WAL");
+        }
+
+        // 2. Set strict system permissions (File: 0444, Dir: 0555)
+        let mut perms = fs::metadata(&db_path).expect("metadata").permissions();
+        perms.set_mode(0o444);
+        fs::set_permissions(&db_path, perms).expect("failed to set file permissions");
+
+        let mut dir_perms = fs::metadata(&db_dir).expect("metadata").permissions();
+        dir_perms.set_mode(0o555);
+        fs::set_permissions(&db_dir, dir_perms).expect("failed to set dir permissions");
+
+        // 3. Try to list (this should use open_readonly and immutable=1)
+        let output = anneal()
+            .env("ANNEAL_DB_PATH", &db_path)
+            .arg("list")
+            .output()
+            .expect("failed to run anneal list");
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Cleanup permissions so TempDir can delete itself
+        let _ = fs::set_permissions(&db_dir, fs::Permissions::from_mode(0o755));
+
+        assert!(
+            output.status.success(),
+            "list should succeed on readonly WAL database. stderr: {stderr}"
+        );
+        assert!(
+            stdout.contains("test-pkg"),
+            "should find the package. stdout: {stdout}"
+        );
+    }
 }
 
 mod quiet_mode {
@@ -346,13 +403,13 @@ mod rebuild_command {
     #[test]
     fn rebuild_does_not_require_root() {
         // rebuild command should NOT require root (AUR helpers don't need root)
-        // It will fail for other reasons (no helper, no db) but not permission denied
+        // It will fail for other reasons (no db) but not permission denied
         if unsafe { libc::getuid() } == 0 {
             return;
         }
 
         let output = anneal()
-            .args(["rebuild", "-f"])
+            .args(["rebuild", "-f", "--cmd", "true"])
             .output()
             .expect("failed to run");
 
@@ -385,7 +442,7 @@ mod rebuild_command {
     fn rebuild_quiet_with_force_ok() {
         // --quiet with -f should not fail due to confirmation conflict
         let output = anneal()
-            .args(["--quiet", "rebuild", "-f"])
+            .args(["--quiet", "rebuild", "-f", "--cmd", "true"])
             .output()
             .expect("failed to run");
 
