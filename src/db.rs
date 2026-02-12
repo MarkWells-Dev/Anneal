@@ -13,7 +13,14 @@ use std::path::Path;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
 /// Default database path.
-pub const DB_PATH: &str = "/var/lib/anneal/anneal.db";
+pub const DEFAULT_DB_PATH: &str = "/var/lib/anneal/anneal.db";
+
+/// Get the database path, checking ANNEAL_DB_PATH environment variable.
+pub fn get_db_path() -> std::path::PathBuf {
+    std::env::var("ANNEAL_DB_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from(DEFAULT_DB_PATH))
+}
 
 /// Database connection wrapper.
 pub struct Database {
@@ -94,7 +101,7 @@ impl Database {
     ///
     /// Returns an error if the database cannot be opened or initialized.
     pub fn open(retention_days: u32) -> Result<Self, DbError> {
-        Self::open_at(Path::new(DB_PATH), retention_days)
+        Self::open_at(&get_db_path(), retention_days)
     }
 
     /// Open the database at a specific path.

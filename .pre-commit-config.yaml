@@ -46,7 +46,6 @@ repos:
         entry: cargo nextest run --all-features
         language: system
         pass_filenames: false
-        stages: [pre-push]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8

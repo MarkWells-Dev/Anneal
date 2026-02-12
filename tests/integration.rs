@@ -163,7 +163,11 @@ mod readonly_commands {
     #[test]
     fn list_without_database() {
         // When no database exists, list should give a helpful error
-        let output = anneal().arg("list").output().expect("failed to run");
+        let output = anneal()
+            .env("ANNEAL_DB_PATH", "/non/existent/path/db.sqlite")
+            .arg("list")
+            .output()
+            .expect("failed to run");
 
         // Either succeeds with empty queue or fails with no database error
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -185,6 +189,7 @@ mod readonly_commands {
     #[test]
     fn ismarked_without_database() {
         let output = anneal()
+            .env("ANNEAL_DB_PATH", "/non/existent/path/db.sqlite")
             .args(["ismarked", "test-pkg"])
             .output()
             .expect("failed to run");
@@ -201,6 +206,7 @@ mod readonly_commands {
     #[test]
     fn query_without_database() {
         let output = anneal()
+            .env("ANNEAL_DB_PATH", "/non/existent/path/db.sqlite")
             .args(["query", "test-pkg"])
             .output()
             .expect("failed to run");
@@ -319,7 +325,11 @@ mod rebuild_command {
 
     #[test]
     fn rebuild_without_database() {
-        let output = anneal().arg("rebuild").output().expect("failed to run");
+        let output = anneal()
+            .env("ANNEAL_DB_PATH", "/non/existent/path/db.sqlite")
+            .arg("rebuild")
+            .output()
+            .expect("failed to run");
 
         // Should fail with no database error
         let stderr = String::from_utf8_lossy(&output.stderr);

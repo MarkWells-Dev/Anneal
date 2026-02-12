@@ -9,7 +9,7 @@ use std::process::{Command as ProcessCommand, ExitCode, Stdio};
 
 use anneal::cli::{Cli, Command};
 use anneal::config::{Config, KNOWN_HELPERS};
-use anneal::db::{DB_PATH, Database, DbError};
+use anneal::db::{Database, DbError, get_db_path};
 use anneal::output;
 use anneal::overrides::Overrides;
 use anneal::trigger::{TriggerError, process_triggers};
@@ -628,7 +628,7 @@ fn has_force_flag(cmd: &Command) -> bool {
 
 /// Open the database in read-only mode, with a helpful error if it doesn't exist.
 fn open_readonly() -> Result<Database, Error> {
-    Database::open_readonly(std::path::Path::new(DB_PATH)).map_err(|e| {
+    Database::open_readonly(&get_db_path()).map_err(|e| {
         if matches!(&e, DbError::Sqlite(rusqlite::Error::SqliteFailure(err, _))
             if err.code == rusqlite::ErrorCode::CannotOpen)
         {
@@ -775,7 +775,8 @@ impl std::fmt::Display for Error {
             Self::Io(e) => write!(f, "{e}"),
             Self::NoDatabase => write!(
                 f,
-                "No database found at {DB_PATH}. Run a command as root first to create it."
+                "No database found at {}. Run a command as root first to create it.",
+                get_db_path().display()
             ),
         }
     }
