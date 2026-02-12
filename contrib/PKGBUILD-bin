@@ -1,6 +1,6 @@
 # Maintainer: Mark Wells <contact@markwells.dev>
 pkgname=anneal-bin
-pkgver=0.2.2
+pkgver=0.2.3
 pkgrel=1
 pkgdesc="Proactive AUR rebuild management for Arch Linux (prebuilt binary)"
 arch=('x86_64')
