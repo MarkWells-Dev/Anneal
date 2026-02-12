@@ -6,19 +6,19 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
-# If multiple runs start for the same commit (e.g. branch push + tag push),
-# cancel the redundant one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: Check
+  # 1. Test & Lint (Fast feedback)
+  test:
+    name: Test & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,16 +35,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Build
-        run: cargo build --all-features
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
@@ -54,6 +51,36 @@ jobs:
       - name: Run tests
         run: cargo nextest run --all-features
 
+  # 2. Build Release Binary (Always runs to ensure release features compile)
+  build:
+    name: Build Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release --features bundled-sqlite
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anneal-x86_64-linux
+          path: target/release/anneal
+          if-no-files-found: error
+
+  # 3. Security & Compliance
   deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
@@ -71,8 +98,9 @@ jobs:
       - name: Run cargo-deny
         run: cargo deny check
 
+  # 4. Arch Linux Specific Lints (Namcap, etc.)
   pre-commit:
-    name: Pre-commit
+    name: Pre-commit (Arch)
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -99,28 +127,59 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          # updpkgsums is skipped in CI because it requires the GitHub release
-          # to be live, which only happens after this CI passes.
+          # updpkgsums is skipped here because it requires the remote source tarball
           SKIP=updpkgsums pre-commit run --all-files
 
+  # 5. Version Verification (Ensures versions are in sync before release)
+  verify-version:
+    name: Verify Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version consistency
+        run: |
+          CARGO_VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          PKGBUILD_VERSION=$(grep -oP '^pkgver=\K.*' contrib/PKGBUILD)
+
+          echo "Cargo.toml version: $CARGO_VERSION"
+          echo "PKGBUILD version: $PKGBUILD_VERSION"
+
+          if [ "$CARGO_VERSION" != "$PKGBUILD_VERSION" ]; then
+            echo "::error::Version mismatch: Cargo.toml ($CARGO_VERSION) != PKGBUILD ($PKGBUILD_VERSION)"
+            exit 1
+          fi
+
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            echo "Tag version: $TAG_VERSION"
+            if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::Version mismatch: Cargo.toml ($CARGO_VERSION) != Tag ($TAG_VERSION)"
+              exit 1
+            fi
+          fi
+
+  # 6. Release (GitHub)
   release:
-    name: Build & Release
+    name: Create Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [check, deny, pre-commit]
+    needs: [test, build, deny, pre-commit, verify-version]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: anneal-x86_64-linux
+          path: .
 
-      - name: Build release binary
-        run: cargo build --release --features bundled-sqlite
-
-      - name: Prepare release assets
-        run: cp target/release/anneal anneal-x86_64-linux
+      - name: Prepare assets
+        run: |
+          mv anneal anneal-x86_64-linux
+          chmod +x anneal-x86_64-linux
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -130,6 +189,7 @@ jobs:
             anneal-x86_64-linux
             contrib/anneal-trigger.hook
 
+  # 7. AUR Publishing
   aur-publish:
     name: Publish to AUR
     if: startsWith(github.ref, 'refs/tags/v')
@@ -137,15 +197,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Verify version matches tag
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION=$(grep -oP '^pkgver=\K.*' contrib/PKGBUILD)
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag version ($TAG_VERSION) does not match PKGBUILD version ($PKG_VERSION)"
-            exit 1
-          fi
 
       - name: Publish anneal to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
